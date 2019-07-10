@@ -165,98 +165,12 @@ class MP_ComplexAddMoveHandler(MP_AddHandler):
 
         :returns: A tuple containing the old path and the new path.
         """
-        if (
-                (pos == 'last-sibling') or
-                (pos == 'right' and target == target.get_last_sibling())
-        ):
-            # easy, the last node
-            last = target.get_last_sibling()
-            newpath = last._inc_path()
-            if movebranch:
-                self.stmts.append(
-                    self.get_sql_newpath_in_branches(oldpath, newpath))
-        else:
-            # do the UPDATE dance
-
-            if newpos is None:
-                siblings = target.get_siblings()
-                siblings = {'left': siblings.filter(path__gte=target.path),
-                            'right': siblings.filter(path__gt=target.path),
-                            'first-sibling': siblings}[pos]
-                basenum = target._get_lastpos_in_path()
-                newpos = {'first-sibling': 1,
-                          'left': basenum,
-                          'right': basenum + 1}[pos]
-
-            newpath = self.node_cls._get_path(target.path, newdepth, newpos)
-
-            # If the move is amongst siblings and is to the left and there
-            # are siblings to the right of its new position then to be on
-            # the safe side we temporarily dump it on the end of the list
-            tempnewpath = None
-            if movebranch and len(oldpath) == len(newpath):
-                parentoldpath = self.node_cls._get_basepath(
-                    oldpath,
-                    int(len(oldpath) / self.node_cls.steplen) - 1
-                )
-                parentnewpath = self.node_cls._get_basepath(
-                    newpath, newdepth - 1)
-                if (
-                    parentoldpath == parentnewpath and
-                    siblings and
-                    newpath < oldpath
-                ):
-                    last = target.get_last_sibling()
-                    basenum = last._get_lastpos_in_path()
-                    tempnewpath = self.node_cls._get_path(
-                        newpath, newdepth, basenum + 2)
-                    self.stmts.append(
-                        self.get_sql_newpath_in_branches(
-                            oldpath, tempnewpath))
-
-            # Optimisation to only move siblings which need moving
-            # (i.e. if we've got holes, allow them to compress)
-            movesiblings = []
-            priorpath = newpath
-            for node in siblings:
-                # If the path of the node is already greater than the path
-                # of the previous node it doesn't need shifting
-                if node.path > priorpath:
-                    break
-                # It does need shifting, so add to the list
-                movesiblings.append(node)
-                # Calculate the path that it would be moved to, as that's
-                # the next "priorpath"
-                priorpath = node._inc_path()
-            movesiblings.reverse()
-
-            for node in movesiblings:
-                # moving the siblings (and their branches) at the right of the
-                # related position one step to the right
-                sql, vals = self.get_sql_newpath_in_branches(
-                    node.path, node._inc_path())
-                self.stmts.append((sql, vals))
-
-                if movebranch:
-                    if oldpath.startswith(node.path):
-                        # if moving to a parent, update oldpath since we just
-                        # increased the path of the entire branch
-                        oldpath = vals[0] + oldpath[len(vals[0]):]
-                    if target.path.startswith(node.path):
-                        # and if we moved the target, update the object
-                        # django made for us, since the update won't do it
-                        # maybe useful in loops
-                        target.path = vals[0] + target.path[len(vals[0]):]
-            if movebranch:
-                # node to move
-                if tempnewpath:
-                    self.stmts.append(
-                        self.get_sql_newpath_in_branches(
-                            tempnewpath, newpath))
-                else:
-                    self.stmts.append(
-                        self.get_sql_newpath_in_branches(
-                            oldpath, newpath))
+        # easy, the last node
+        last = target.get_last_sibling()
+        newpath = last._inc_path()
+        if movebranch:
+            self.stmts.append(
+                self.get_sql_newpath_in_branches(oldpath, newpath))
         return oldpath, newpath
 
     def get_sql_newpath_in_branches(self, oldpath, newpath):
